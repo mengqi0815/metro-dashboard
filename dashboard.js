@@ -4,20 +4,52 @@
 let ALL = null, DAP_D = null, MF_MONTHLY = null, MF_DAP = null, COEF = null;
 
 // ===== 异步加载数据 =====
+// 从原始 Muse 项目页面拉取 HTML，解析内嵌的数据变量
+const SOURCE_URL = 'http://dw5j8w5ip5q4d8yo-et15-sqa.cloudide.dev.alipay.net:8080/metro-dashboard.html';
+
 async function loadData() {
   try {
-    const [allRes, dapRes, mfmRes, mfdRes, coefRes] = await Promise.all([
-      fetch('data/all-data.json').then(r => r.json()),
-      fetch('data/dap-daily-data.json').then(r => r.json()),
-      fetch('data/mf-monthly-data.json').then(r => r.json()),
-      fetch('data/mf-dap-monthly-data.json').then(r => r.json()),
-      fetch('data/coef-data.json').then(r => r.json()),
-    ]);
-    ALL = allRes;
-    DAP_D = dapRes;
-    MF_MONTHLY = mfmRes;
-    MF_DAP = mfdRes;
-    COEF = coefRes;
+    // 尝试从本地 data/ 目录加载（GitHub Pages 部署时用）
+    try {
+      const [allRes, dapRes, mfmRes, mfdRes, coefRes] = await Promise.all([
+        fetch('data/all-data.json').then(r => r.json()),
+        fetch('data/dap-daily-data.json').then(r => r.json()),
+        fetch('data/mf-monthly-data.json').then(r => r.json()),
+        fetch('data/mf-dap-monthly-data.json').then(r => r.json()),
+        fetch('data/coef-data.json').then(r => r.json()),
+      ]);
+      ALL = allRes;
+      DAP_D = dapRes;
+      MF_MONTHLY = mfmRes;
+      MF_DAP = mfdRes;
+      COEF = coefRes;
+      initDashboard();
+      return;
+    } catch (localErr) {
+      console.log('本地数据不可用，尝试从源站加载...');
+    }
+
+    // 从原始 Muse 页面加载数据
+    const resp = await fetch(SOURCE_URL);
+    const html = await resp.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const scripts = doc.querySelectorAll('script:not[src]');
+    for (const script of scripts) {
+      const code = script.textContent;
+      if (code.includes('__ALL_DATA__')) {
+        // 执行数据脚本（在沙箱中）
+        const dataScript = document.createElement('script');
+        dataScript.textContent = code;
+        document.body.appendChild(dataScript);
+        dataScript.remove();
+      }
+    }
+    ALL = window.__ALL_DATA__;
+    DAP_D = window.__DAP_DAILY_DATA__;
+    MF_MONTHLY = window.__MF_MONTHLY_DATA__;
+    MF_DAP = window.__MF_DAP_MONTHLY_DATA__;
+    COEF = window.__COEF_DATA__;
     initDashboard();
   } catch (e) {
     console.error('数据加载失败:', e);
